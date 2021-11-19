@@ -1,0 +1,307 @@
+From 195bb29e82d5ff66cca5408b4a45157e7e2e70d5 Mon Sep 17 00:00:00 2001
+From: Raphael Mounier <mounierr07@gmail.com>
+Date: Thu, 18 Nov 2021 22:57:47 +0100
+Subject: [PATCH] Fix signal strength
+
+Fix signal strength in A11 for prague device (4G,3G and 2G)
+---
+ .../com/android/internal/telephony/RIL.java   | 143 +++++++++++++++++-
+ .../internal/telephony/RadioIndication.java   |  32 +++-
+ 2 files changed, 160 insertions(+), 15 deletions(-)
+
+diff --git a/framework_opt_telephony/src/java/com/android/internal/telephony/RIL.java b/framework_opt_telephony/src/java/com/android/internal/telephony/RIL.java
+index 3f646b0..758184c 100644
+--- a/framework_opt_telephony/src/java/com/android/internal/telephony/RIL.java
++++ b/framework_opt_telephony/src/java/com/android/internal/telephony/RIL.java
+@@ -150,7 +150,7 @@ public class RIL extends BaseCommands implements CommandsInterface {
+     // Have a separate wakelock instance for Ack
+     static final String RILJ_ACK_WAKELOCK_NAME = "RILJ_ACK_WL";
+     static final boolean RILJ_LOGD = true;
+-    static final boolean RILJ_LOGV = false; // STOPSHIP if true
++    static final boolean RILJ_LOGV = true; // STOPSHIP if true
+     static final int RIL_HISTOGRAM_BUCKET_COUNT = 5;
+ 
+     /**
+@@ -722,6 +722,8 @@ public class RIL extends BaseCommands implements CommandsInterface {
+     }
+ 
+     private RILRequest obtainRequest(int request, Message result, WorkSource workSource) {
++    
++        if (RILJ_LOGV) riljLogv("obtainRequest : " + request);
+         RILRequest rr = RILRequest.obtain(request, result, workSource);
+         addRequest(rr);
+         return rr;
+@@ -729,6 +731,8 @@ public class RIL extends BaseCommands implements CommandsInterface {
+ 
+     private RILRequest obtainRequest(int request, Message result, WorkSource workSource,
+             Object... args) {
++            
++        if (RILJ_LOGV) riljLogv("obtainRequest (obj) : " + request);
+         RILRequest rr = RILRequest.obtain(request, result, workSource, args);
+         addRequest(rr);
+         return rr;
+@@ -1463,12 +1467,16 @@ public class RIL extends BaseCommands implements CommandsInterface {
+ 
+     @Override
+     public void getSignalStrength(Message result) {
++
++        if (RILJ_LOGV) riljLogv("getSignalStrength");
++
+         IRadio radioProxy = getRadioProxy(result);
+         if (radioProxy != null) {
++             if (RILJ_LOGV) riljLog("getSignalStrength radioproxy not null");		
+             RILRequest rr = obtainRequest(RIL_REQUEST_SIGNAL_STRENGTH, result,
+                     mRILDefaultWorkSource);
+ 
+-            if (RILJ_LOGD) riljLog(rr.serialString() + "> " + requestToString(rr.mRequest));
++            if (RILJ_LOGV) riljLog("RILRequest " + rr.serialString() + "> " + requestToString(rr.mRequest));
+ 
+             if (mRadioVersion.greaterOrEqual(RADIO_HAL_VERSION_1_4)) {
+                 android.hardware.radio.V1_4.IRadio radioProxy14 =
+@@ -1479,6 +1487,8 @@ public class RIL extends BaseCommands implements CommandsInterface {
+                     handleRadioProxyExceptionForRR(rr, "getSignalStrength_1_4", e);
+                 }
+             } else {
++            
++            	if (RILJ_LOGV) riljLog("radioproxy < 1.4");
+                 try {
+                     radioProxy.getSignalStrength(rr.mSerial);
+                 } catch (RemoteException | RuntimeException e) {
+@@ -4901,7 +4911,7 @@ public class RIL extends BaseCommands implements CommandsInterface {
+         IRadio radioProxy = getRadioProxy(result);
+         if (radioProxy != null) {
+             if (mRadioVersion.less(RADIO_HAL_VERSION_1_2)) {
+-                riljLoge("setSignalStrengthReportingCriteria ignored on IRadio version less "
++	        riljLoge("setSignalStrengthReportingCriteria ignored on IRadio version less "
+                         + "than 1.2");
+                 return;
+             }
+@@ -6453,17 +6463,17 @@ public class RIL extends BaseCommands implements CommandsInterface {
+ 
+     @UnsupportedAppUsage
+     void unsljLogMore(int response, String more) {
+-        riljLog("[UNSL]< " + responseToString(response) + " " + more);
++        riljLog("[UNSL-More]< " + responseToString(response) + " " + more);
+     }
+ 
+     @UnsupportedAppUsage
+     void unsljLogRet(int response, Object ret) {
+-        riljLog("[UNSL]< " + responseToString(response) + " " + retToString(response, ret));
++        riljLog("[UNSL-Ret]< " + responseToString(response) + " " + retToString(response, ret));
+     }
+ 
+     @UnsupportedAppUsage
+     void unsljLogvRet(int response, Object ret) {
+-        riljLogv("[UNSL]< " + responseToString(response) + " " + retToString(response, ret));
++        riljLogv("[UNSL-RetV]< " + responseToString(response) + " " + retToString(response, ret));
+     }
+ 
+     @Override
+@@ -6663,6 +6673,8 @@ public class RIL extends BaseCommands implements CommandsInterface {
+     public SignalStrength fixupSignalStrength10(SignalStrength signalStrength) {
+         List<CellSignalStrengthGsm> gsmList = signalStrength.getCellSignalStrengths(
+                 CellSignalStrengthGsm.class);
++                
++              
+         // If GSM is not the primary type, then bail out; no fixup needed.
+         if (gsmList.isEmpty() || !gsmList.get(0).isValid()) {
+             return signalStrength;
+@@ -6705,6 +6717,124 @@ public class RIL extends BaseCommands implements CommandsInterface {
+                 new CellSignalStrengthTdscdma(), new CellSignalStrengthLte(),
+                 new CellSignalStrengthNr());
+     }
++    
++    
++    /**
++     * Fixup for SignalStrength for Huawei device
++     * @param signalStrength the initial signal strength
++     * @return a new SignalStrength
++     */
++    public SignalStrength fixupSignalStrengthHuawei(android.hardware.radio.V1_0.SignalStrength signalStrength) {
++        int gsmSignalStrength = signalStrength.gw.signalStrength;
++        int gsmBitErrorRate = signalStrength.gw.bitErrorRate;
++        int gsmTimingAdvance = signalStrength.gw.timingAdvance;
++        int mWcdmaRscp = 0;
++        int mWcdmaEcio = 0;
++        int cdmaDbm = signalStrength.cdma.dbm;
++        int cdmaEcio = signalStrength.cdma.ecio;
++        int evdoDbm = signalStrength.evdo.dbm;
++        int evdoEcio = signalStrength.evdo.ecio;
++        int evdoSnr = signalStrength.evdo.signalNoiseRatio;
++        int lteSignalStrength = signalStrength.lte.signalStrength;
++        int lteRsrp = signalStrength.lte.rsrp;
++        int lteRsrq = signalStrength.lte.rsrq;
++        int lteRssnr = signalStrength.lte.rssnr;
++        int lteCqi = signalStrength.lte.cqi;
++        int lteTimingAdvance = signalStrength.lte.timingAdvance;
++        int mGsm = 0;
++        int mRat = 0;
++        
++        
++        // Calcul level with Rssnr, Rsrq, Rsrp value - so specify KEY_PARAMETERS_USED_FOR_LTE_SIGNAL_BAR_INT (parameters_used_for_lte_signal_bar_int) to use this 3 values
++     	// <UL>
++     	//  <LI>RSRP = 1 << 0</LI>
++     	//  <LI>RSRQ = 1 << 1</LI>
++     	//  <LI>RSSNR = 1 << 2</LI>
++     	// </UL>
++        if (lteRsrp != 0) { // LTE
++            // Nothing to DO
++        } else if (gsmSignalStrength == 0 && lteRsrp == 0) { // 3G
++            lteRsrp = (mWcdmaRscp & 0xFF) - 256;
++            lteRsrq = (mWcdmaEcio & 0xFF) - 256;
++            if (lteRsrp > -20) { // None or Unknown
++                lteRssnr = -200;
++            } else if (lteRsrp >= -85) { // Great
++                lteRssnr = 300;
++            } else if (lteRsrp >= -95) { // Good
++                lteRssnr = 129;
++            } else if (lteRsrp >= -105) { // Moderate
++                lteRssnr = 44;
++            } else if (lteRsrp >= -115) { // Poor
++                lteRssnr = 9;
++            } else if (lteRsrp >= -140) { // None or Unknown
++                lteRssnr = -200;
++            }
++        } else if (mWcdmaRscp == 0 && lteRsrp == 0) { // 2G
++            lteRsrp = (gsmSignalStrength & 0xFF) - 256;
++            if (lteRsrp > -20) { // None or Unknown
++                lteRsrq = -21;
++                lteRssnr = -200;
++            } else if (lteRsrp >= -85) { // Great
++                lteRsrq = -3;
++                lteRssnr = 300;
++            } else if (lteRsrp >= -95) { // Good
++                lteRsrq = -7;
++                lteRssnr = 129;
++            } else if (lteRsrp >= -105) { // Moderate
++                lteRsrq = -12;
++                lteRssnr = 44;
++            } else if (lteRsrp >= -115) { // Poor
++                lteRsrq = -17;
++                lteRssnr = 9;
++            } else if (lteRsrp >= -140) { // None or Unknown
++                lteRsrq = -21;
++                lteRssnr = -200;
++            }      
++        }  
++		
++
++	// 4G - LTE
++	// .lte = {.signalStrength = 99, .rsrp = -104, .rsrq = -16, .rssnr = -4, .cqi = 2147483647, .timingAdvance = -1},
++	// public CellSignalStrengthLte(int rssi, int rsrp, int rsrq, int rssnr, int cqi, int timingAdvance) {
++	CellSignalStrengthLte lteStrength = new CellSignalStrengthLte(SignalStrength.INVALID,
++						lteRsrp,  
++						lteRsrq,
++						lteRssnr,
++						lteCqi,
++						lteTimingAdvance);
++
++	riljLog("Huawei signal : LTE dbm : " + String.valueOf(lteStrength.getDbm()) + 
++			", level : " + String.valueOf(lteStrength.getLevel()) + 
++			", Rsrp  : " + String.valueOf(lteStrength.getRsrp()) +
++			", Rsrq  : " + String.valueOf(lteStrength.getRsrq()) +
++			", Rssi  : " + String.valueOf(lteStrength.getRssi()) +
++			", Rssnr  : " + String.valueOf(lteStrength.getRssnr()));
++			
++	// GSM
++	// .gw = {.signalStrength = -91, .bitErrorRate = -1, .timingAdvance = 0}
++	// public CellSignalStrengthGsm(int rssi, int ber, int ta) {
++	// rssi in dBm [-113, -51] or UNAVAILABLE
++	// bit error rate (0-7, 99) TS 27.007 8.5 or UNAVAILABLE
++	CellSignalStrengthGsm gsmStrength = new CellSignalStrengthGsm(gsmSignalStrength,
++						gsmBitErrorRate,
++						gsmTimingAdvance);
++
++	riljLog("Huawei signal : GSM dbm : " + String.valueOf(gsmStrength.getDbm()) + 
++			", errorrate : " + String.valueOf(gsmStrength.getBitErrorRate()) + 
++			", timingadvance  : " + String.valueOf(gsmStrength.getTimingAdvance()));
++
++	// Perhaps add also gsm signalStrength
++	return new SignalStrength(
++			new CellSignalStrengthCdma(), 
++			gsmStrength,
++			new CellSignalStrengthWcdma(),
++			new CellSignalStrengthTdscdma(), 
++			lteStrength,
++			new CellSignalStrengthNr());	
++		
++	}
++    
++    
+ 
+     /**
+      * Convert CellInfo defined in 1.4/types.hal to CellInfo type.
+@@ -6949,4 +7079,3 @@ public class RIL extends BaseCommands implements CommandsInterface {
+         return mRadioVersion;
+     }
+ }
+-
+diff --git a/framework_opt_telephony/src/java/com/android/internal/telephony/RadioIndication.java b/framework_opt_telephony/src/java/com/android/internal/telephony/RadioIndication.java
+index 735f0f4..2237ad5 100644
+--- a/framework_opt_telephony/src/java/com/android/internal/telephony/RadioIndication.java
++++ b/framework_opt_telephony/src/java/com/android/internal/telephony/RadioIndication.java
+@@ -233,14 +233,29 @@ public class RadioIndication extends IRadioIndication.Stub {
+ 
+     public void currentSignalStrength(int indicationType,
+                                       android.hardware.radio.V1_0.SignalStrength signalStrength) {
++        SignalStrength ss = null;
++                                      
+         mRil.processIndication(indicationType);
+ 
+-        SignalStrength ssInitial = new SignalStrength(signalStrength);
+-
+-        SignalStrength ss = mRil.fixupSignalStrength10(ssInitial);
+-        // Note this is set to "verbose" because it happens frequently
+-        if (RIL.RILJ_LOGV) mRil.unsljLogvRet(RIL_UNSOL_SIGNAL_STRENGTH, ss);
+-
++	// Note this is set to "verbose" because it happens frequently
++	if (RIL.RILJ_LOGV) mRil.unsljLogvRet(RIL_UNSOL_SIGNAL_STRENGTH, signalStrength);
++	 
++	// Fix signalStrength for Huawei
++	String hardware = android.os.SystemProperties.get("ro.hardware", "");
++        if(hardware.contains("hi3660") || hardware.contains("hi6250") || hardware.contains("hi3670") || hardware.contains("kirin"))
++	{
++		if (RIL.RILJ_LOGV) mRil.riljLog("currentSignalStrength Found Huawei device");
++		ss = mRil.fixupSignalStrengthHuawei(signalStrength);
++	}
++	else
++	{
++		SignalStrength ssInitial = new SignalStrength(signalStrength);
++		ss = mRil.fixupSignalStrength10(ssInitial);
++	}
++		
++
++	// Note this is set to "verbose" because it happens frequently
++	if (RIL.RILJ_LOGV) mRil.unsljLogvRet(RIL_UNSOL_SIGNAL_STRENGTH, ss);
+         if (mRil.mSignalStrengthRegistrant != null) {
+             mRil.mSignalStrengthRegistrant.notifyRegistrant(new AsyncResult (null, ss, null));
+         }
+@@ -267,6 +282,8 @@ public class RadioIndication extends IRadioIndication.Stub {
+      */
+     public void currentSignalStrength_1_2(int indicationType,
+                                       android.hardware.radio.V1_2.SignalStrength signalStrength) {
++                                      
++        if (RIL.RILJ_LOGV) mRil.riljLog("currentSignalStrength 1.2");
+         mRil.processIndication(indicationType);
+ 
+         SignalStrength ss = new SignalStrength(signalStrength);
+@@ -284,10 +301,10 @@ public class RadioIndication extends IRadioIndication.Stub {
+     public void currentSignalStrength_1_4(int indicationType,
+             android.hardware.radio.V1_4.SignalStrength signalStrength) {
+ 
++        if (RIL.RILJ_LOGV) mRil.riljLog("currentSignalStrength 1.4");
+         mRil.processIndication(indicationType);
+ 
+         SignalStrength ss = new SignalStrength(signalStrength);
+-
+         if (RIL.RILJ_LOGV) mRil.unsljLogvRet(RIL_UNSOL_SIGNAL_STRENGTH, ss);
+ 
+         if (mRil.mSignalStrengthRegistrant != null) {
+@@ -1208,4 +1225,3 @@ public class RadioIndication extends IRadioIndication.Stub {
+                 new AsyncResult(null, response, null));
+     }
+ }
+-
+-- 
+2.30.2
+
