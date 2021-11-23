@@ -1,46 +1,19 @@
-From 468f065fb267125f1d45d565d5979e77dab7d71a Mon Sep 17 00:00:00 2001
+From acb94d25b426c059a7b376cc2d2e8e0fd429618f Mon Sep 17 00:00:00 2001
 From: Raphael Mounier <mounierr07@gmail.com>
-Date: Tue, 23 Nov 2021 21:58:34 +0100
+Date: Tue, 23 Nov 2021 22:43:21 +0100
 Subject: [PATCH] Telephony: Signal Strength empty on Huawei RIL
 
 On Huawei device hi6250 the measurement of the signal strength is not correct (Android 10 and 11)
 ---
- .../com/android/internal/telephony/RIL.java   | 142 +++++++++++++++++-
+ .../com/android/internal/telephony/RIL.java   | 133 +++++++++++++++++-
  .../internal/telephony/RadioIndication.java   |  31 +++-
- 2 files changed, 160 insertions(+), 13 deletions(-)
+ 2 files changed, 152 insertions(+), 12 deletions(-)
 
 diff --git a/src/java/com/android/internal/telephony/RIL.java b/src/java/com/android/internal/telephony/RIL.java
-index 782cd9ebb..758184c5a 100644
+index 782cd9ebb..0e2db790f 100644
 --- a/src/java/com/android/internal/telephony/RIL.java
 +++ b/src/java/com/android/internal/telephony/RIL.java
-@@ -150,7 +150,7 @@ public class RIL extends BaseCommands implements CommandsInterface {
-     // Have a separate wakelock instance for Ack
-     static final String RILJ_ACK_WAKELOCK_NAME = "RILJ_ACK_WL";
-     static final boolean RILJ_LOGD = true;
--    static final boolean RILJ_LOGV = false; // STOPSHIP if true
-+    static final boolean RILJ_LOGV = true; // STOPSHIP if true
-     static final int RIL_HISTOGRAM_BUCKET_COUNT = 5;
- 
-     /**
-@@ -722,6 +722,8 @@ public class RIL extends BaseCommands implements CommandsInterface {
-     }
- 
-     private RILRequest obtainRequest(int request, Message result, WorkSource workSource) {
-+    
-+        if (RILJ_LOGV) riljLogv("obtainRequest : " + request);
-         RILRequest rr = RILRequest.obtain(request, result, workSource);
-         addRequest(rr);
-         return rr;
-@@ -729,6 +731,8 @@ public class RIL extends BaseCommands implements CommandsInterface {
- 
-     private RILRequest obtainRequest(int request, Message result, WorkSource workSource,
-             Object... args) {
-+            
-+        if (RILJ_LOGV) riljLogv("obtainRequest (obj) : " + request);
-         RILRequest rr = RILRequest.obtain(request, result, workSource, args);
-         addRequest(rr);
-         return rr;
-@@ -1463,12 +1467,16 @@ public class RIL extends BaseCommands implements CommandsInterface {
+@@ -1463,12 +1463,16 @@ public class RIL extends BaseCommands implements CommandsInterface {
  
      @Override
      public void getSignalStrength(Message result) {
@@ -58,25 +31,24 @@ index 782cd9ebb..758184c5a 100644
  
              if (mRadioVersion.greaterOrEqual(RADIO_HAL_VERSION_1_4)) {
                  android.hardware.radio.V1_4.IRadio radioProxy14 =
-@@ -1479,6 +1487,8 @@ public class RIL extends BaseCommands implements CommandsInterface {
+@@ -1479,6 +1483,7 @@ public class RIL extends BaseCommands implements CommandsInterface {
                      handleRadioProxyExceptionForRR(rr, "getSignalStrength_1_4", e);
                  }
              } else {
-+            
 +            	if (RILJ_LOGV) riljLog("radioproxy < 1.4");
                  try {
                      radioProxy.getSignalStrength(rr.mSerial);
                  } catch (RemoteException | RuntimeException e) {
-@@ -4901,7 +4911,7 @@ public class RIL extends BaseCommands implements CommandsInterface {
+@@ -4901,7 +4906,7 @@ public class RIL extends BaseCommands implements CommandsInterface {
          IRadio radioProxy = getRadioProxy(result);
          if (radioProxy != null) {
              if (mRadioVersion.less(RADIO_HAL_VERSION_1_2)) {
 -                riljLoge("setSignalStrengthReportingCriteria ignored on IRadio version less "
-+	        riljLoge("setSignalStrengthReportingCriteria ignored on IRadio version less "
++		riljLoge("setSignalStrengthReportingCriteria ignored on IRadio version less "
                          + "than 1.2");
                  return;
              }
-@@ -6453,17 +6463,17 @@ public class RIL extends BaseCommands implements CommandsInterface {
+@@ -6453,17 +6458,17 @@ public class RIL extends BaseCommands implements CommandsInterface {
  
      @UnsupportedAppUsage
      void unsljLogMore(int response, String more) {
@@ -97,16 +69,7 @@ index 782cd9ebb..758184c5a 100644
      }
  
      @Override
-@@ -6663,6 +6673,8 @@ public class RIL extends BaseCommands implements CommandsInterface {
-     public SignalStrength fixupSignalStrength10(SignalStrength signalStrength) {
-         List<CellSignalStrengthGsm> gsmList = signalStrength.getCellSignalStrengths(
-                 CellSignalStrengthGsm.class);
-+                
-+              
-         // If GSM is not the primary type, then bail out; no fixup needed.
-         if (gsmList.isEmpty() || !gsmList.get(0).isValid()) {
-             return signalStrength;
-@@ -6705,6 +6717,124 @@ public class RIL extends BaseCommands implements CommandsInterface {
+@@ -6705,6 +6710,124 @@ public class RIL extends BaseCommands implements CommandsInterface {
                  new CellSignalStrengthTdscdma(), new CellSignalStrengthLte(),
                  new CellSignalStrengthNr());
      }
@@ -232,7 +195,7 @@ index 782cd9ebb..758184c5a 100644
      /**
       * Convert CellInfo defined in 1.4/types.hal to CellInfo type.
 diff --git a/src/java/com/android/internal/telephony/RadioIndication.java b/src/java/com/android/internal/telephony/RadioIndication.java
-index bf8ae5f02..2237ad57a 100644
+index bf8ae5f02..9b1c38383 100644
 --- a/src/java/com/android/internal/telephony/RadioIndication.java
 +++ b/src/java/com/android/internal/telephony/RadioIndication.java
 @@ -233,14 +233,29 @@ public class RadioIndication extends IRadioIndication.Stub {
@@ -240,7 +203,7 @@ index bf8ae5f02..2237ad57a 100644
      public void currentSignalStrength(int indicationType,
                                        android.hardware.radio.V1_0.SignalStrength signalStrength) {
 +        SignalStrength ss = null;
-+                                      
++        
          mRil.processIndication(indicationType);
  
 -        SignalStrength ssInitial = new SignalStrength(signalStrength);
@@ -251,7 +214,7 @@ index bf8ae5f02..2237ad57a 100644
 -
 +	// Note this is set to "verbose" because it happens frequently
 +	if (RIL.RILJ_LOGV) mRil.unsljLogvRet(RIL_UNSOL_SIGNAL_STRENGTH, signalStrength);
-+	 
++
 +	// Fix signalStrength for Huawei
 +	String hardware = android.os.SystemProperties.get("ro.hardware", "");
 +        if(hardware.contains("hi3660") || hardware.contains("hi6250") || hardware.contains("hi3670") || hardware.contains("kirin"))
@@ -275,8 +238,8 @@ index bf8ae5f02..2237ad57a 100644
       */
      public void currentSignalStrength_1_2(int indicationType,
                                        android.hardware.radio.V1_2.SignalStrength signalStrength) {
-+                                      
-+        if (RIL.RILJ_LOGV) mRil.riljLog("currentSignalStrength 1.2");
++
++	if (RIL.RILJ_LOGV) mRil.riljLog("currentSignalStrength 1.2");
          mRil.processIndication(indicationType);
  
          SignalStrength ss = new SignalStrength(signalStrength);
