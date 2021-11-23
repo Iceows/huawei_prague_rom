@@ -1,16 +1,19 @@
-From acb94d25b426c059a7b376cc2d2e8e0fd429618f Mon Sep 17 00:00:00 2001
+From 5a5934eaf2328b959b5ea6882e67a4f82f2038e8 Mon Sep 17 00:00:00 2001
 From: Raphael Mounier <mounierr07@gmail.com>
-Date: Tue, 23 Nov 2021 22:43:21 +0100
-Subject: [PATCH] Telephony: Signal Strength empty on Huawei RIL
+Date: Tue, 23 Nov 2021 23:19:25 +0100
+Subject: [PATCH] Telephony: Fix Signal Strength empty on Huawei RIL
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
 
-On Huawei device hi6250 the measurement of the signal strength is not correct (Android 10 and 11)
+From the version of Android 10, the radio signal bar is empty Huawei hi6150. This patch allows you to fill the RIL classes with the correct values ​​(2G, 3G and 4G)
 ---
  .../com/android/internal/telephony/RIL.java   | 133 +++++++++++++++++-
  .../internal/telephony/RadioIndication.java   |  31 +++-
  2 files changed, 152 insertions(+), 12 deletions(-)
 
 diff --git a/src/java/com/android/internal/telephony/RIL.java b/src/java/com/android/internal/telephony/RIL.java
-index 782cd9ebb..0e2db790f 100644
+index 782cd9ebb..c3fd250bf 100644
 --- a/src/java/com/android/internal/telephony/RIL.java
 +++ b/src/java/com/android/internal/telephony/RIL.java
 @@ -1463,12 +1463,16 @@ public class RIL extends BaseCommands implements CommandsInterface {
@@ -22,7 +25,7 @@ index 782cd9ebb..0e2db790f 100644
 +
          IRadio radioProxy = getRadioProxy(result);
          if (radioProxy != null) {
-+             if (RILJ_LOGV) riljLog("getSignalStrength radioproxy not null");		
++             if (RILJ_LOGV) riljLog("getSignalStrength radioproxy not null");
              RILRequest rr = obtainRequest(RIL_REQUEST_SIGNAL_STRENGTH, result,
                      mRILDefaultWorkSource);
  
@@ -69,12 +72,11 @@ index 782cd9ebb..0e2db790f 100644
      }
  
      @Override
-@@ -6705,6 +6710,124 @@ public class RIL extends BaseCommands implements CommandsInterface {
-                 new CellSignalStrengthTdscdma(), new CellSignalStrengthLte(),
+@@ -6706,6 +6711,124 @@ public class RIL extends BaseCommands implements CommandsInterface {
                  new CellSignalStrengthNr());
      }
-+    
-+    
+ 
++
 +    /**
 +     * Fixup for SignalStrength for Huawei device
 +     * @param signalStrength the initial signal strength
@@ -99,8 +101,8 @@ index 782cd9ebb..0e2db790f 100644
 +        int lteTimingAdvance = signalStrength.lte.timingAdvance;
 +        int mGsm = 0;
 +        int mRat = 0;
-+        
-+        
++
++
 +        // Calcul level with Rssnr, Rsrq, Rsrp value - so specify KEY_PARAMETERS_USED_FOR_LTE_SIGNAL_BAR_INT (parameters_used_for_lte_signal_bar_int) to use this 3 values
 +     	// <UL>
 +     	//  <LI>RSRP = 1 << 0</LI>
@@ -145,27 +147,27 @@ index 782cd9ebb..0e2db790f 100644
 +            } else if (lteRsrp >= -140) { // None or Unknown
 +                lteRsrq = -21;
 +                lteRssnr = -200;
-+            }      
-+        }  
-+		
++            }
++        }
++
 +
 +	// 4G - LTE
 +	// .lte = {.signalStrength = 99, .rsrp = -104, .rsrq = -16, .rssnr = -4, .cqi = 2147483647, .timingAdvance = -1},
 +	// public CellSignalStrengthLte(int rssi, int rsrp, int rsrq, int rssnr, int cqi, int timingAdvance) {
 +	CellSignalStrengthLte lteStrength = new CellSignalStrengthLte(SignalStrength.INVALID,
-+						lteRsrp,  
++						lteRsrp,
 +						lteRsrq,
 +						lteRssnr,
 +						lteCqi,
 +						lteTimingAdvance);
 +
-+	riljLog("Huawei signal : LTE dbm : " + String.valueOf(lteStrength.getDbm()) + 
-+			", level : " + String.valueOf(lteStrength.getLevel()) + 
++	riljLog("Huawei signal : LTE dbm : " + String.valueOf(lteStrength.getDbm()) +
++			", level : " + String.valueOf(lteStrength.getLevel()) +
 +			", Rsrp  : " + String.valueOf(lteStrength.getRsrp()) +
 +			", Rsrq  : " + String.valueOf(lteStrength.getRsrq()) +
 +			", Rssi  : " + String.valueOf(lteStrength.getRssi()) +
 +			", Rssnr  : " + String.valueOf(lteStrength.getRssnr()));
-+			
++
 +	// GSM
 +	// .gw = {.signalStrength = -91, .bitErrorRate = -1, .timingAdvance = 0}
 +	// public CellSignalStrengthGsm(int rssi, int ber, int ta) {
@@ -175,43 +177,44 @@ index 782cd9ebb..0e2db790f 100644
 +						gsmBitErrorRate,
 +						gsmTimingAdvance);
 +
-+	riljLog("Huawei signal : GSM dbm : " + String.valueOf(gsmStrength.getDbm()) + 
-+			", errorrate : " + String.valueOf(gsmStrength.getBitErrorRate()) + 
++	riljLog("Huawei signal : GSM dbm : " + String.valueOf(gsmStrength.getDbm()) +
++			", errorrate : " + String.valueOf(gsmStrength.getBitErrorRate()) +
 +			", timingadvance  : " + String.valueOf(gsmStrength.getTimingAdvance()));
 +
 +	// Perhaps add also gsm signalStrength
 +	return new SignalStrength(
-+			new CellSignalStrengthCdma(), 
++			new CellSignalStrengthCdma(),
 +			gsmStrength,
 +			new CellSignalStrengthWcdma(),
-+			new CellSignalStrengthTdscdma(), 
++			new CellSignalStrengthTdscdma(),
 +			lteStrength,
-+			new CellSignalStrengthNr());	
-+		
++			new CellSignalStrengthNr());
++
 +	}
-+    
-+    
- 
++
++
++
      /**
       * Convert CellInfo defined in 1.4/types.hal to CellInfo type.
+      * @param records List of CellInfo defined in 1.4/types.hal.
 diff --git a/src/java/com/android/internal/telephony/RadioIndication.java b/src/java/com/android/internal/telephony/RadioIndication.java
-index bf8ae5f02..9b1c38383 100644
+index bf8ae5f02..d402f9ff9 100644
 --- a/src/java/com/android/internal/telephony/RadioIndication.java
 +++ b/src/java/com/android/internal/telephony/RadioIndication.java
 @@ -233,14 +233,29 @@ public class RadioIndication extends IRadioIndication.Stub {
  
      public void currentSignalStrength(int indicationType,
                                        android.hardware.radio.V1_0.SignalStrength signalStrength) {
-+        SignalStrength ss = null;
-+        
-         mRil.processIndication(indicationType);
- 
--        SignalStrength ssInitial = new SignalStrength(signalStrength);
+-        mRil.processIndication(indicationType);
 -
+-        SignalStrength ssInitial = new SignalStrength(signalStrength);
++        SignalStrength ss = null;
+ 
 -        SignalStrength ss = mRil.fixupSignalStrength10(ssInitial);
 -        // Note this is set to "verbose" because it happens frequently
 -        if (RIL.RILJ_LOGV) mRil.unsljLogvRet(RIL_UNSOL_SIGNAL_STRENGTH, ss);
--
++        mRil.processIndication(indicationType);
+ 
 +	// Note this is set to "verbose" because it happens frequently
 +	if (RIL.RILJ_LOGV) mRil.unsljLogvRet(RIL_UNSOL_SIGNAL_STRENGTH, signalStrength);
 +
@@ -227,7 +230,7 @@ index bf8ae5f02..9b1c38383 100644
 +		SignalStrength ssInitial = new SignalStrength(signalStrength);
 +		ss = mRil.fixupSignalStrength10(ssInitial);
 +	}
-+		
++
 +
 +	// Note this is set to "verbose" because it happens frequently
 +	if (RIL.RILJ_LOGV) mRil.unsljLogvRet(RIL_UNSOL_SIGNAL_STRENGTH, ss);
