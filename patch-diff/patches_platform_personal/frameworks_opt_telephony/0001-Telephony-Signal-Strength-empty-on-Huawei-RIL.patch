@@ -1,18 +1,18 @@
-From 195bb29e82d5ff66cca5408b4a45157e7e2e70d5 Mon Sep 17 00:00:00 2001
+From 468f065fb267125f1d45d565d5979e77dab7d71a Mon Sep 17 00:00:00 2001
 From: Raphael Mounier <mounierr07@gmail.com>
-Date: Thu, 18 Nov 2021 22:57:47 +0100
-Subject: [PATCH] Fix signal strength
+Date: Tue, 23 Nov 2021 21:58:34 +0100
+Subject: [PATCH] Telephony: Signal Strength empty on Huawei RIL
 
-Fix signal strength in A11 for prague device (4G,3G and 2G)
+On Huawei device hi6250 the measurement of the signal strength is not correct (Android 10 and 11)
 ---
- .../com/android/internal/telephony/RIL.java   | 143 +++++++++++++++++-
- .../internal/telephony/RadioIndication.java   |  32 +++-
- 2 files changed, 160 insertions(+), 15 deletions(-)
+ .../com/android/internal/telephony/RIL.java   | 142 +++++++++++++++++-
+ .../internal/telephony/RadioIndication.java   |  31 +++-
+ 2 files changed, 160 insertions(+), 13 deletions(-)
 
-diff --git a/framework_opt_telephony/src/java/com/android/internal/telephony/RIL.java b/framework_opt_telephony/src/java/com/android/internal/telephony/RIL.java
-index 3f646b0..758184c 100644
---- a/framework_opt_telephony/src/java/com/android/internal/telephony/RIL.java
-+++ b/framework_opt_telephony/src/java/com/android/internal/telephony/RIL.java
+diff --git a/src/java/com/android/internal/telephony/RIL.java b/src/java/com/android/internal/telephony/RIL.java
+index 782cd9ebb..758184c5a 100644
+--- a/src/java/com/android/internal/telephony/RIL.java
++++ b/src/java/com/android/internal/telephony/RIL.java
 @@ -150,7 +150,7 @@ public class RIL extends BaseCommands implements CommandsInterface {
      // Have a separate wakelock instance for Ack
      static final String RILJ_ACK_WAKELOCK_NAME = "RILJ_ACK_WL";
@@ -231,15 +231,10 @@ index 3f646b0..758184c 100644
  
      /**
       * Convert CellInfo defined in 1.4/types.hal to CellInfo type.
-@@ -6949,4 +7079,3 @@ public class RIL extends BaseCommands implements CommandsInterface {
-         return mRadioVersion;
-     }
- }
--
-diff --git a/framework_opt_telephony/src/java/com/android/internal/telephony/RadioIndication.java b/framework_opt_telephony/src/java/com/android/internal/telephony/RadioIndication.java
-index 735f0f4..2237ad5 100644
---- a/framework_opt_telephony/src/java/com/android/internal/telephony/RadioIndication.java
-+++ b/framework_opt_telephony/src/java/com/android/internal/telephony/RadioIndication.java
+diff --git a/src/java/com/android/internal/telephony/RadioIndication.java b/src/java/com/android/internal/telephony/RadioIndication.java
+index bf8ae5f02..2237ad57a 100644
+--- a/src/java/com/android/internal/telephony/RadioIndication.java
++++ b/src/java/com/android/internal/telephony/RadioIndication.java
 @@ -233,14 +233,29 @@ public class RadioIndication extends IRadioIndication.Stub {
  
      public void currentSignalStrength(int indicationType,
@@ -297,11 +292,6 @@ index 735f0f4..2237ad5 100644
          if (RIL.RILJ_LOGV) mRil.unsljLogvRet(RIL_UNSOL_SIGNAL_STRENGTH, ss);
  
          if (mRil.mSignalStrengthRegistrant != null) {
-@@ -1208,4 +1225,3 @@ public class RadioIndication extends IRadioIndication.Stub {
-                 new AsyncResult(null, response, null));
-     }
- }
--
 -- 
 2.30.2
 
