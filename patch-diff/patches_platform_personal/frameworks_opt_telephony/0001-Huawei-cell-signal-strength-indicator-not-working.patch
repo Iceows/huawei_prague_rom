@@ -1,19 +1,19 @@
-From 0a7d47480d67e0915f93d064a8bc6048ba1f44f2 Mon Sep 17 00:00:00 2001
+From 3680359ce25f87c626687ce391ba1d01f593f4b1 Mon Sep 17 00:00:00 2001
 From: Raphael Mounier <mounierr07@gmail.com>
-Date: Thu, 25 Nov 2021 12:34:42 +0100
-Subject: [PATCH] Fix issue Huawei cell signal strength indicator not working
+Date: Fri, 26 Nov 2021 07:53:04 +0100
+Subject: [PATCH] Huawei cell signal strength indicator not working
 
 This patch fixes a problem concerning all Huawei kirin devices (MediaPad, Prague, Warsaw ..). On these devices the signal quality is not recovered correctly from the modem layer
 ---
- .../com/android/internal/telephony/RIL.java   | 120 ++++++++++++++++++
+ .../com/android/internal/telephony/RIL.java   | 122 ++++++++++++++++++
  .../internal/telephony/RadioIndication.java   |  27 +++-
- 2 files changed, 141 insertions(+), 6 deletions(-)
+ 2 files changed, 143 insertions(+), 6 deletions(-)
 
 diff --git a/src/java/com/android/internal/telephony/RIL.java b/src/java/com/android/internal/telephony/RIL.java
-index 782cd9ebb..e86464cec 100644
+index 782cd9ebb..417740343 100644
 --- a/src/java/com/android/internal/telephony/RIL.java
 +++ b/src/java/com/android/internal/telephony/RIL.java
-@@ -6706,6 +6706,126 @@ public class RIL extends BaseCommands implements CommandsInterface {
+@@ -6706,6 +6706,128 @@ public class RIL extends BaseCommands implements CommandsInterface {
                  new CellSignalStrengthNr());
      }
  
@@ -44,17 +44,6 @@ index 782cd9ebb..e86464cec 100644
 +        int mRat = 0;
 +
 +
-+	if (RILJ_LOGD) {
-+		riljLog("Huawei signal : LTE dbm : " + String.valueOf(lteStrength.getDbm()) +
-+				", level : " + String.valueOf(lteStrength.getLevel()) +
-+				", Rsrp  : " + String.valueOf(lteStrength.getRsrp()) +
-+				", Rsrq  : " + String.valueOf(lteStrength.getRsrq()) +
-+				", Rssi  : " + String.valueOf(lteStrength.getRssi()) +
-+				", Rssnr  : " + String.valueOf(lteStrength.getRssnr()));
-+		riljLog("Huawei signal : GSM dbm : " + String.valueOf(gsmStrength.getDbm()) +
-+			", errorrate : " + String.valueOf(gsmStrength.getBitErrorRate()) +
-+			", timingadvance  : " + String.valueOf(gsmStrength.getTimingAdvance()));
-+	}
 +
 +	//Calcul level with Rssnr, Rsrq, Rsrp value - so specify KEY_PARAMETERS_USED_FOR_LTE_SIGNAL_BAR_INT (parameters_used_for_lte_signal_bar_int) to use this 3 values
 +	//RSRP = 1 << 0
@@ -122,6 +111,19 @@ index 782cd9ebb..e86464cec 100644
 +	CellSignalStrengthGsm gsmStrength = new CellSignalStrengthGsm(gsmSignalStrength,
 +						gsmBitErrorRate,
 +						gsmTimingAdvance);
++
++	if (RILJ_LOGD) {
++		riljLog("Huawei signal : LTE dbm : " + String.valueOf(lteStrength.getDbm()) +
++				", level : " + String.valueOf(lteStrength.getLevel()) +
++				", Rsrp  : " + String.valueOf(lteStrength.getRsrp()) +
++				", Rsrq  : " + String.valueOf(lteStrength.getRsrq()) +
++				", Rssi  : " + String.valueOf(lteStrength.getRssi()) +
++				", Rssnr  : " + String.valueOf(lteStrength.getRssnr()));
++		riljLog("Huawei signal : GSM dbm : " + String.valueOf(gsmStrength.getDbm()) +
++			", errorrate : " + String.valueOf(gsmStrength.getBitErrorRate()) +
++			", timingadvance  : " + String.valueOf(gsmStrength.getTimingAdvance()));
++	}
++
 +
 +
 +	// Perhaps add also gsm signalStrength
