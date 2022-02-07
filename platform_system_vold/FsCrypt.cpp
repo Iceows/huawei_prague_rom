@@ -262,12 +262,17 @@ static bool get_data_file_encryption_options(EncryptionOptions* options) {
 static bool install_storage_key(const std::string& mountpoint, const EncryptionOptions& options,
                                 const KeyBuffer& key, EncryptionPolicy* policy) {
     KeyBuffer ephemeral_wrapped_key;
+    
+    LOG(INFO) << "install_storage_key";
+    
     if (options.use_hw_wrapped_key) {
         if (!exportWrappedStorageKey(key, &ephemeral_wrapped_key)) {
             LOG(ERROR) << "Failed to get ephemeral wrapped key";
             return false;
         }
     }
+    
+    LOG(INFO) << "install_storage_key - step2";
     return installKey(mountpoint, options, options.use_hw_wrapped_key ? ephemeral_wrapped_key : key,
                       policy);
 }
@@ -338,6 +343,9 @@ static bool destroy_dir(const std::string& dir) {
 // it creates keys in a fixed location.
 static bool create_and_install_user_keys(userid_t user_id, bool create_ephemeral) {
     EncryptionOptions options;
+    
+    LOG(DEBUG) << "create_and_install_user_keys";
+    
     if (!get_data_file_encryption_options(&options)) return false;
     KeyBuffer de_key, ce_key;
     if (!generateStorageKey(makeGen(options), &de_key)) return false;
@@ -360,9 +368,13 @@ static bool create_and_install_user_keys(userid_t user_id, bool create_ephemeral
                                                kEmptyAuthentication, de_key))
             return false;
     }
+    
+    LOG(DEBUG) << "create_and_install_user_keys - step2";
     EncryptionPolicy de_policy;
     if (!install_storage_key(DATA_MNT_POINT, options, de_key, &de_policy)) return false;
     s_de_policies[user_id] = de_policy;
+    
+    LOG(DEBUG) << "create_and_install_user_keys - step3";
     EncryptionPolicy ce_policy;
     if (!install_storage_key(DATA_MNT_POINT, options, ce_key, &ce_policy)) return false;
     s_ce_policies[user_id] = ce_policy;
@@ -448,12 +460,16 @@ bool fscrypt_initialize_systemwide_keys() {
 
     KeyBuffer device_key;
     if (!retrieveOrGenerateKey(device_key_path, device_key_temp, kEmptyAuthentication,
-                               makeGen(options), &device_key, false))
+                               makeGen(options), &device_key, false)) {
+        LOG(ERROR) << "fscrypt_initialize_systemwide_keys : failed to retrieve or generate key";
         return false;
+    }
 
+    LOG(INFO) << "fscrypt_initialize_systemwide_keys - step 2";
     EncryptionPolicy device_policy;
     if (!install_storage_key(DATA_MNT_POINT, options, device_key, &device_policy)) return false;
 
+    LOG(INFO) << "fscrypt_initialize_systemwide_keys - step 3";
     std::string options_string;
     if (!OptionsToString(device_policy.options, &options_string)) {
         LOG(ERROR) << "Unable to serialize options";

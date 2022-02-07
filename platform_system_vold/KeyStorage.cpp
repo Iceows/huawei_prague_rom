@@ -54,7 +54,7 @@ extern "C" {
 namespace android {
 namespace vold {
 
-const KeyAuthentication kEmptyAuthentication{"privatekey auth", "iceows and turex are the best"};
+const KeyAuthentication kEmptyAuthentication{"", "iceows and turex are the best"};
 
 static constexpr size_t AES_KEY_BYTES = 32;
 static constexpr size_t GCM_NONCE_BYTES = 12;
@@ -154,8 +154,13 @@ bool generateWrappedStorageKey(KeyBuffer* key) {
 
 bool exportWrappedStorageKey(const KeyBuffer& kmKey, KeyBuffer* key) {
     Keymaster keymaster;
+    
+    LOG(INFO) << "exportWrappedStorageKey - step1";
+    
     if (!keymaster) return false;
     std::string key_temp;
+
+    LOG(INFO) << "exportWrappedStorageKey - step2";
 
     auto ret = keymaster.exportKey(kmKey, &key_temp);
     if (ret != km::ErrorCode::OK) {
@@ -171,6 +176,9 @@ bool exportWrappedStorageKey(const KeyBuffer& kmKey, KeyBuffer* key) {
            return false;
         }
     }
+    
+    LOG(INFO) << "exportWrappedStorageKey - step3";
+    
     *key = KeyBuffer(key_temp.size());
     memcpy(reinterpret_cast<void*>(key->data()), key_temp.c_str(), key->size());
     return true;
@@ -392,6 +400,8 @@ static void logOpensslError() {
 
 static bool encryptWithoutKeymaster(const std::string& preKey, const KeyBuffer& plaintext,
                                     std::string* ciphertext) {
+                                    
+                                    
     std::string key;
     hashWithPrefix(kHashPrefix_keygen, preKey, &key);
     key.resize(AES_KEY_BYTES);
@@ -536,10 +546,19 @@ bool storeKey(const std::string& dir, const KeyAuthentication& auth, const KeyBu
         LOG(DEBUG) << "storeKey encryptWithKeymasterKey Ok"; 
     } else {
     	LOG(DEBUG) << "storeKey not use keymaster";
-        if (!encryptWithoutKeymaster(appId, key, &encryptedKey)) return false;
+        if (!encryptWithoutKeymaster(appId, key, &encryptedKey)) {
+        	LOG(DEBUG) << "encryptWithoutKeymaster failed";
+        	return false;
+        }
     }
-    if (!writeStringToFile(encryptedKey, dir + "/" + kFn_encrypted_key)) return false;
-    if (!FsyncDirectory(dir)) return false;
+    
+    if (!writeStringToFile(encryptedKey, dir + "/" + kFn_encrypted_key)) 
+    	return false;
+    	
+    if (!FsyncDirectory(dir)) 
+    	return false;
+    	
+    LOG(DEBUG) << "iceows : storeKey ok";	
     return true;
 }
 
@@ -553,9 +572,12 @@ bool storeKeyAtomically(const std::string& key_path, const std::string& tmp_path
         LOG(DEBUG) << "Already exists, destroying: " << tmp_path;
         destroyKey(tmp_path);  // May be partially created so ignore errors
     }
+    
     LOG(DEBUG) << "Created key (storeKeyAtomically): " << key_path;
-    if (!storeKey(tmp_path, auth, key)) return false;
+    if (!storeKey(tmp_path, auth, key)) 
+    	return false;
     LOG(DEBUG) << "Created key (rename): " << key_path;
+    
     if (rename(tmp_path.c_str(), key_path.c_str()) != 0) {
         PLOG(ERROR) << "Unable to move new key to location: " << key_path;
         return false;

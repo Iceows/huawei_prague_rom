@@ -173,11 +173,19 @@ static bool installKeyLegacy(const KeyBuffer& key, const std::string& raw_ref) {
     KeyBuffer fsKeyBuffer(sizeof(fscrypt_key));
     fscrypt_key& fs_key = *reinterpret_cast<fscrypt_key*>(fsKeyBuffer.data());
 
-    if (!fillKey(key, &fs_key)) return false;
+    if (!fillKey(key, &fs_key)) {
+    	PLOG(DEBUG)  <<  "installKeyLegacy - failed fillkey";
+    	return false;
+    }
+    	
     key_serial_t device_keyring;
-    if (!fscryptKeyring(&device_keyring)) return false;
     
-    LOG(DEBUG)  <<  "installKeyLegacy install key";
+    if (!fscryptKeyring(&device_keyring)) {
+	PLOG(DEBUG)  <<  "installKeyLegacy - failed fscryptKeyring";
+    	return false;
+    }
+    
+    PLOG(DEBUG)  <<  "installKeyLegacy install key";
     for (char const* const* name_prefix = NAME_PREFIXES; *name_prefix != nullptr; name_prefix++) {
         auto ref = buildLegacyKeyName(*name_prefix, raw_ref);
         key_serial_t key_id =
@@ -285,6 +293,8 @@ bool installKey(const std::string& mountpoint, const EncryptionOptions& options,
     struct fscrypt_add_key_arg* arg = (struct fscrypt_add_key_arg*)arg_buf.data();
 
     // Initialize the "key specifier", which is like a name for the key.
+    LOG(DEBUG) << "installKey";
+    
     switch (options.version) {
         case 1:
             // A key for a v1 policy is specified by an arbitrary 8-byte
@@ -299,6 +309,7 @@ bool installKey(const std::string& mountpoint, const EncryptionOptions& options,
                 policy->key_raw_ref = generateKeyRef((const uint8_t*)key.data(), key.size());
             }
             if (!isFsKeyringSupported()) {
+            	LOG(DEBUG) << "isFsKeyringSupported not support";
                 return installKeyLegacy(key, policy->key_raw_ref);
             }
             if (!buildKeySpecifier(&arg->key_spec, *policy)) {
@@ -321,8 +332,13 @@ bool installKey(const std::string& mountpoint, const EncryptionOptions& options,
     arg->raw_size = key.size();
     memcpy(arg->raw, key.data(), key.size());
 
-    if (!installFsKeyringKey(mountpoint, options, arg)) return false;
+    LOG(DEBUG) << "installKey - step2";
+    if (!installFsKeyringKey(mountpoint, options, arg)) {
+    	LOG(DEBUG) << "installFsKeyringKey failed";
+    	return false;
+    }
 
+    LOG(DEBUG) << "installKey - step3";
     if (arg->key_spec.type == FSCRYPT_KEY_SPEC_TYPE_IDENTIFIER) {
         // Retrieve the key identifier that the kernel computed.
         policy->key_raw_ref =
