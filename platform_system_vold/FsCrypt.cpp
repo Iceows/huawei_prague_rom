@@ -157,23 +157,17 @@ static std::string get_ce_key_current_path(const std::string& directory_path) {
 
 static bool get_ce_key_new_path(const std::string& directory_path,
                                 const std::vector<std::string>& paths, std::string* ce_key_path) {
-
-    LOG(DEBUG) << "get_ce_key_new_path ";                
     if (paths.empty()) {
         *ce_key_path = get_ce_key_current_path(directory_path);
         return true;
     }
-    LOG(DEBUG) << "get_ce_key_new_path (0) " << paths[0];
     for (unsigned int i = 0; i < UINT_MAX; i++) {
         auto const candidate = StringPrintf("%s/cx%010u", directory_path.c_str(), i);
-        LOG(DEBUG) << "get_ce_key_new_path candidate : " << candidate;
         if (paths[0] < candidate) {
             *ce_key_path = candidate;
-            LOG(DEBUG) << "get_ce_key_new_path return true"; 
             return true;
         }
     }
-     LOG(DEBUG) << "get_ce_key_new_path return false"; 
     return false;
 }
 
@@ -262,17 +256,12 @@ static bool get_data_file_encryption_options(EncryptionOptions* options) {
 static bool install_storage_key(const std::string& mountpoint, const EncryptionOptions& options,
                                 const KeyBuffer& key, EncryptionPolicy* policy) {
     KeyBuffer ephemeral_wrapped_key;
-    
-    LOG(INFO) << "install_storage_key";
-    
     if (options.use_hw_wrapped_key) {
         if (!exportWrappedStorageKey(key, &ephemeral_wrapped_key)) {
             LOG(ERROR) << "Failed to get ephemeral wrapped key";
             return false;
         }
     }
-    
-    LOG(INFO) << "install_storage_key - step2";
     return installKey(mountpoint, options, options.use_hw_wrapped_key ? ephemeral_wrapped_key : key,
                       policy);
 }
@@ -343,9 +332,6 @@ static bool destroy_dir(const std::string& dir) {
 // it creates keys in a fixed location.
 static bool create_and_install_user_keys(userid_t user_id, bool create_ephemeral) {
     EncryptionOptions options;
-    
-    LOG(DEBUG) << "create_and_install_user_keys";
-    
     if (!get_data_file_encryption_options(&options)) return false;
     KeyBuffer de_key, ce_key;
     if (!generateStorageKey(makeGen(options), &de_key)) return false;
@@ -368,13 +354,9 @@ static bool create_and_install_user_keys(userid_t user_id, bool create_ephemeral
                                                kEmptyAuthentication, de_key))
             return false;
     }
-    
-    LOG(DEBUG) << "create_and_install_user_keys - step2";
     EncryptionPolicy de_policy;
     if (!install_storage_key(DATA_MNT_POINT, options, de_key, &de_policy)) return false;
     s_de_policies[user_id] = de_policy;
-    
-    LOG(DEBUG) << "create_and_install_user_keys - step3";
     EncryptionPolicy ce_policy;
     if (!install_storage_key(DATA_MNT_POINT, options, ce_key, &ce_policy)) return false;
     s_ce_policies[user_id] = ce_policy;
@@ -460,16 +442,12 @@ bool fscrypt_initialize_systemwide_keys() {
 
     KeyBuffer device_key;
     if (!retrieveOrGenerateKey(device_key_path, device_key_temp, kEmptyAuthentication,
-                               makeGen(options), &device_key, false)) {
-        LOG(ERROR) << "fscrypt_initialize_systemwide_keys : failed to retrieve or generate key";
+                               makeGen(options), &device_key, false))
         return false;
-    }
 
-    LOG(INFO) << "fscrypt_initialize_systemwide_keys - step 2";
     EncryptionPolicy device_policy;
     if (!install_storage_key(DATA_MNT_POINT, options, device_key, &device_policy)) return false;
 
-    LOG(INFO) << "fscrypt_initialize_systemwide_keys - step 3";
     std::string options_string;
     if (!OptionsToString(device_policy.options, &options_string)) {
         LOG(ERROR) << "Unable to serialize options";
@@ -497,7 +475,9 @@ bool fscrypt_initialize_systemwide_keys() {
 
 bool fscrypt_init_user0() {
     LOG(DEBUG) << "fscrypt_init_user0";
+    
     if (fscrypt_is_native()) {
+        LOG(DEBUG) << "fscrypt_init_user0 : fscrypt_is_native";
         if (!prepare_dir(user_key_dir, 0700, AID_ROOT, AID_ROOT)) return false;
         if (!prepare_dir(user_key_dir + "/ce", 0700, AID_ROOT, AID_ROOT)) return false;
         if (!prepare_dir(user_key_dir + "/de", 0700, AID_ROOT, AID_ROOT)) return false;
@@ -508,6 +488,9 @@ bool fscrypt_init_user0() {
         // explicit calls to install DE keys for secondary users
         if (!load_all_de_keys()) return false;
     }
+    
+    LOG(DEBUG) << "fscrypt_init_user0 : trace iceows";
+        
     // We can only safely prepare DE storage here, since CE keys are probably
     // entangled with user credentials.  The framework will always prepare CE
     // storage once CE keys are installed.
@@ -728,16 +711,11 @@ static bool fscrypt_rewrap_user_key(userid_t user_id, int serial,
         LOG(ERROR) << "Failed to retrieve key for user " << user_id;
         return false;
     }
-    LOG(DEBUG) << "iceows - fscrypt_rewrap_user_key 0";
     auto const paths = get_ce_key_paths(directory_path);
     std::string ce_key_path;
     if (!get_ce_key_new_path(directory_path, paths, &ce_key_path)) return false;
-    
-    
-    LOG(DEBUG) << "iceows - fscrypt_rewrap_user_key 1";
     if (!android::vold::storeKeyAtomically(ce_key_path, user_key_temp, store_auth, ce_key))
         return false;
-     LOG(DEBUG) << "iceows - fscrypt_rewrap_user_key 2";       
     if (!android::vold::FsyncDirectory(directory_path)) return false;
     return true;
 }
