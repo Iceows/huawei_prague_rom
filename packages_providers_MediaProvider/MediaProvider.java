@@ -1089,8 +1089,6 @@ public class MediaProvider extends ContentProvider {
     }
 
     public void scanDirectory(File file, int reason) {
-    	// iceows
-    	Log.d(TAG, "Start to scan directory");
         mMediaScanner.scanDirectory(file, reason);
     }
 

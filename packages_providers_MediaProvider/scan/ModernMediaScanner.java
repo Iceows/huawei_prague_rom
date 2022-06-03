@@ -310,8 +310,6 @@ public class ModernMediaScanner implements MediaScanner {
             mRoot = root;
             mReason = reason;
             
-            // Iceows
-            Log.d(TAG, "Iceows Start Scan ");
             mVolumeName = FileUtils.getVolumeName(mContext, root);
             mFilesUri = MediaStore.Files.getContentUri(mVolumeName);
             mSignal = getOrCreateSignal(mVolumeName);

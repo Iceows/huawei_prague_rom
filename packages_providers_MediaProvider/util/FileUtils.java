@@ -832,24 +832,13 @@ public class FileUtils {
      * Return volume name which hosts the given path.
      */
     public static @NonNull String getVolumeName(@NonNull Context context, @NonNull File path) {
-        Log.i(TAG, "getVolumeName - step0 - path: " + path);
         if (contains(Environment.getStorageDirectory(), path)) {
-            // Iceows
-            Log.i(TAG, "getVolumeName - step1");
-            
             StorageManager storage=context.getSystemService(StorageManager.class);
-            //List<StorageVolume> volumes=storage.getStorageVolumes();
             if (storage.getStorageVolume(path)!=null)   
-            {       
-            	Log.i(TAG, "getVolumeName - step1a");   
             	return storage.getStorageVolume(path).getMediaStoreVolumeName();
-            	}
-            else     {       
-            	Log.i(TAG, "getVolumeName - step1b");  
+            else      
             	return MediaStore.VOLUME_INTERNAL;   
-            }         	
         } else {
-            Log.i(TAG, "getVolumeName - step2");
             return MediaStore.VOLUME_INTERNAL;
         }
     }
