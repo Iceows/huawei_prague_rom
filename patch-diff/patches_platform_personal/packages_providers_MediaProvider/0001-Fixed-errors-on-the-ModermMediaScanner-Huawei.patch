@@ -1,14 +1,15 @@
-From 27f87dd8dea6a6ef6db79251a04e8e2d18970ef0 Mon Sep 17 00:00:00 2001
+From 70db3626abb435555a211e8b24df2507217d102b Mon Sep 17 00:00:00 2001
 From: Iceows <mounierr07@gmail.com>
-Date: Tue, 12 Jul 2022 02:30:29 +0200
-Subject: [PATCH] Fix MediaProvider crash on Huawei device
+Date: Tue, 12 Jul 2022 10:33:46 +0200
+Subject: [PATCH] Fixed errors on the ModermMediaScanner (Huawei)
 
+This patch prevents the media scanner from crashing when starting the phone. This problem prevented displaying the default sounds (alarm, ringtones..). The root cause of the error is a null volume name for system
 ---
  .../media/scan/ModernMediaScanner.java          | 17 ++++++++++++++---
  1 file changed, 14 insertions(+), 3 deletions(-)
 
 diff --git a/src/com/android/providers/media/scan/ModernMediaScanner.java b/src/com/android/providers/media/scan/ModernMediaScanner.java
-index 8927bfa5..6274337f 100644
+index 8927bfa5..885bacae 100644
 --- a/src/com/android/providers/media/scan/ModernMediaScanner.java
 +++ b/src/com/android/providers/media/scan/ModernMediaScanner.java
 @@ -367,11 +367,22 @@ public class ModernMediaScanner implements MediaScanner {
@@ -33,7 +34,7 @@ index 8927bfa5..6274337f 100644
 +                mVolume = MediaVolume.fromInternal();
 +            else
 +                mVolume=VolumeTmp;
-+			
++            
              mVolumeName = mVolume.getName();
              mFilesUri = MediaStore.Files.getContentUri(mVolumeName);
              mSignal = new CancellationSignal();
