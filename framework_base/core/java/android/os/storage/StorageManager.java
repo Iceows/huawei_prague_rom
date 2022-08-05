@@ -1257,13 +1257,13 @@ public class StorageManager {
     /** {@hide} */
     @UnsupportedAppUsage(maxTargetSdk = Build.VERSION_CODES.R, trackingBug = 170729553)
     private static @Nullable StorageVolume getStorageVolume(StorageVolume[] volumes, File file) {
-		Slog.d(TAG, "Iceows start getStorageVolume : " + file)
+        Slog.d(TAG, "Iceows start getStorageVolume : " + file)
         if (file == null) {
             return null;
         }
         final String path = file.getAbsolutePath();
 		
-		Slog.d(TAG, "Iceows start getStorageVolume - getAbsolutePath : " + path)
+        Slog.d(TAG, "Iceows start getStorageVolume - getAbsolutePath : " + path)
         if (path.startsWith(DEPRECATE_DATA_PREFIX)) {
             final Uri uri = ContentResolver.translateDeprecatedDataPath(path);
             return AppGlobals.getInitialApplication().getSystemService(StorageManager.class)
@@ -1279,7 +1279,7 @@ public class StorageManager {
         
 		for (StorageVolume volume : volumes) {
             File volumeFile = volume.getPathFile();
-			Slog.d(TAG, "Iceows boucle : " + volumeFile)
+        Slog.d(TAG, "Iceows boucle : " + volumeFile)
             try {
                 volumeFile = volumeFile.getCanonicalFile();
             } catch (IOException ignored) {
